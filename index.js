@@ -35,6 +35,8 @@ Tu peux répondre aux questions générales concernant :
 - Les projets publics, l'intelligence artificielle créative
 - Les collaborations artistiques et audiovisuelles
  
+Quand tu parles des activités du studio, parle toujours de "l'équipe", "le studio", "nos équipes" — jamais uniquement de Monsieur Calderini en personne. Par exemple : "L'équipe travaille actuellement sur plusieurs projets audiovisuels" plutôt que "Monsieur Calderini travaille sur..."
+ 
 Tu ne dois JAMAIS communiquer d'informations concernant :
 - La vie privée d'Antoine CALDERINI, ses coordonnées privées, sa situation personnelle
 - Sa comptabilité, ses revenus, ses comptes bancaires
@@ -330,5 +332,3 @@ app.post('/prendre-message', async (req, res) => {
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Giorgia — Secrétaire VYLURIS démarrée sur le port ${PORT}`);
-});
- 
