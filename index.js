@@ -1,4 +1,3 @@
-
 const express = require('express');
 const twilio = require('twilio');
 const axios = require('axios');
@@ -126,7 +125,7 @@ app.post('/appel-entrant', async (req, res) => {
     hints: 'bonjour, je suis, c\'est, de la part'
   });
  
-  gather.say({ voice: 'alice', language: 'fr-FR' }, accueil);
+  gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, accueil);
  
   twiml.redirect({ method: 'POST' }, '/appel-entrant');
  
@@ -182,7 +181,7 @@ app.post('/nom-appelant', async (req, res) => {
     method: 'POST'
   });
  
-  gather.say({ voice: 'alice', language: 'fr-FR' }, repVocale);
+  gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, repVocale);
   twiml.pause({ length: 5 });
   twiml.redirect({ method: 'POST' }, `/attente-decision?callSid=${callSid}`);
  
@@ -219,7 +218,7 @@ app.post('/motif-appel', async (req, res) => {
   appelsEnCours[callSid] = data;
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'alice', language: 'fr-FR' }, rep);
+  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
   twiml.pause({ length: 25 });
   twiml.redirect({ method: 'POST' }, `/verifier-reponse?callSid=${callSid}`);
  
@@ -232,7 +231,7 @@ app.post('/attente-decision', async (req, res) => {
   const callSid = req.query.callSid || req.body.CallSid;
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'alice', language: 'fr-FR' },
+  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' },
     'Je vérifie la disponibilité de Monsieur Calderini. Un instant s\'il vous plaît.');
   twiml.pause({ length: 25 });
   twiml.redirect({ method: 'POST' }, `/verifier-reponse?callSid=${callSid}`);
@@ -270,7 +269,7 @@ app.post('/verifier-reponse', async (req, res) => {
   if (data.decision === 'OUI') {
     const rep = await giorgiaRepond(data.conversation || [],
       'Annonce à l\'appelant que tu le transfères maintenant vers Monsieur Calderini. Courte phrase chaleureuse.');
-    twiml.say({ voice: 'alice', language: 'fr-FR' }, rep);
+    twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
     twiml.dial(TONY_PHONE);
     delete appelsEnCours[callSid];
  
@@ -284,7 +283,7 @@ app.post('/verifier-reponse', async (req, res) => {
       action: `/prendre-message?callSid=${callSid}`,
       method: 'POST'
     });
-    gather.say({ voice: 'alice', language: 'fr-FR' }, rep);
+    gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
  
   } else {
     // Pas encore de réponse — on repoll avec musique d'attente
@@ -318,7 +317,7 @@ app.post('/prendre-message', async (req, res) => {
     'Confirme à l\'appelant que son message a bien été transmis et prends congé de façon chaleureuse et professionnelle.');
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'alice', language: 'fr-FR' }, conge);
+  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, conge);
  
   delete appelsEnCours[callSid];
  
@@ -330,4 +329,3 @@ app.post('/prendre-message', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Giorgia — Secrétaire VYLURIS démarrée sur le port ${PORT}`);
 });
- 
