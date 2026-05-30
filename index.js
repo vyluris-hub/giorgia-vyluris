@@ -11,8 +11,10 @@ const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID;
 const TWILIO_AUTH_TOKEN  = process.env.TWILIO_AUTH_TOKEN;
 const TWILIO_PHONE       = process.env.TWILIO_PHONE;
 const TONY_PHONE         = process.env.TONY_PHONE;
-const CLAUDE_API_KEY     = process.env.CLAUDE_API_KEY;
-const PORT               = process.env.PORT || 3000;
+const CLAUDE_API_KEY      = process.env.CLAUDE_API_KEY;
+const ELEVENLABS_API_KEY  = process.env.ELEVENLABS_API_KEY;
+const ELEVENLABS_VOICE_ID = process.env.ELEVENLABS_VOICE_ID || 'WeAAwKYcS06VmXw086yZ';
+const PORT                = process.env.PORT || 3000;
  
 const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
  
@@ -70,6 +72,40 @@ function nettoyerPourVoix(texte) {
     .trim();
 }
  
+ 
+// ─── STOCKAGE AUDIO TEMPORAIRE ───────────────────────────────────────────────
+const audioCache = {};
+ 
+// ─── SYNTHÈSE VOCALE ELEVENLABS ───────────────────────────────────────────────
+async function synthVoix(texte, cacheKey) {
+  if (!ELEVENLABS_API_KEY) return null;
+  try {
+    const response = await axios.post(
+      `https://api.elevenlabs.io/v1/text-to-speech/${ELEVENLABS_VOICE_ID}`,
+      {
+        text: texte,
+        model_id: 'eleven_multilingual_v2',
+        voice_settings: { stability: 0.5, similarity_boost: 0.85 }
+      },
+      {
+        headers: {
+          'xi-api-key': ELEVENLABS_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'audio/mpeg'
+        },
+        responseType: 'arraybuffer'
+      }
+    );
+    const buf = Buffer.from(response.data);
+    const id  = cacheKey || Date.now().toString();
+    audioCache[id] = { buf, expires: Date.now() + 120000 };
+    return id;
+  } catch (err) {
+    console.error('Erreur ElevenLabs:', err.message);
+    return null;
+  }
+}
+ 
 // ─── STOCKAGE TEMPORAIRE ──────────────────────────────────────────────────────
 const appelsEnCours = {};
  
@@ -103,6 +139,29 @@ async function giorgiaRepond(conversation, instruction) {
   }
 }
  
+ 
+// ─── ROUTE AUDIO ─────────────────────────────────────────────────────────────
+app.get('/audio/:id', (req, res) => {
+  const entry = audioCache[req.params.id];
+  if (!entry || Date.now() > entry.expires) {
+    return res.status(404).send('Audio expiré');
+  }
+  res.set('Content-Type', 'audio/mpeg');
+  res.send(entry.buf);
+});
+ 
+ 
+// ─── HELPER VOCAL (ElevenLabs ou Polly fallback) ─────────────────────────────
+async function sayVoix(element, texte, callSid) {
+  const key = callSid + '_' + Date.now();
+  const audioId = await synthVoix(texte, key);
+  if (audioId && process.env.PUBLIC_URL) {
+    element.play(`${process.env.PUBLIC_URL}/audio/${audioId}`);
+  } else {
+    element.say({ voice: 'Polly.Lea', language: 'fr-FR' }, texte);
+  }
+}
+ 
 // ─── 1. APPEL ENTRANT ─────────────────────────────────────────────────────────
 app.post('/appel-entrant', async (req, res) => {
   const callSid   = req.body.CallSid;
@@ -129,7 +188,7 @@ app.post('/appel-entrant', async (req, res) => {
     hints: 'bonjour, je suis, c\'est, de la part'
   });
  
-  gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, accueil);
+  await sayVoix(gather, accueil, callSid);
  
   twiml.redirect({ method: 'POST' }, '/appel-entrant');
  
@@ -185,7 +244,7 @@ app.post('/nom-appelant', async (req, res) => {
     method: 'POST'
   });
  
-  gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, repVocale);
+  await sayVoix(gather, repVocale, callSid);
   twiml.pause({ length: 5 });
   twiml.redirect({ method: 'POST' }, `/attente-decision?callSid=${callSid}`);
  
@@ -222,7 +281,7 @@ app.post('/motif-appel', async (req, res) => {
   appelsEnCours[callSid] = data;
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
+  await sayVoix(twiml, rep, callSid);
   twiml.pause({ length: 25 });
   twiml.redirect({ method: 'POST' }, `/verifier-reponse?callSid=${callSid}`);
  
@@ -235,8 +294,7 @@ app.post('/attente-decision', async (req, res) => {
   const callSid = req.query.callSid || req.body.CallSid;
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' },
-    'Je vérifie la disponibilité de Monsieur Calderini. Un instant s\'il vous plaît.');
+  await sayVoix(twiml, 'Je vérifie la disponibilité de Monsieur Calderini. Un instant s'il vous plaît.', callSid);
   twiml.pause({ length: 25 });
   twiml.redirect({ method: 'POST' }, `/verifier-reponse?callSid=${callSid}`);
  
@@ -273,7 +331,7 @@ app.post('/verifier-reponse', async (req, res) => {
   if (data.decision === 'OUI') {
     const rep = await giorgiaRepond(data.conversation || [],
       'Annonce à l\'appelant que tu le transfères maintenant vers Monsieur Calderini. Courte phrase chaleureuse.');
-    twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
+    await sayVoix(twiml, rep, callSid);
     twiml.dial(TONY_PHONE);
     delete appelsEnCours[callSid];
  
@@ -287,7 +345,7 @@ app.post('/verifier-reponse', async (req, res) => {
       action: `/prendre-message?callSid=${callSid}`,
       method: 'POST'
     });
-    gather.say({ voice: 'Polly.Lea', language: 'fr-FR' }, rep);
+    await sayVoix(gather, rep, callSid);
  
   } else {
     // Pas encore de réponse — on repoll avec musique d'attente
@@ -321,7 +379,7 @@ app.post('/prendre-message', async (req, res) => {
     'Confirme à l\'appelant que son message a bien été transmis et prends congé de façon chaleureuse et professionnelle.');
  
   const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'Polly.Lea', language: 'fr-FR' }, conge);
+  await sayVoix(twiml, conge, callSid);
  
   delete appelsEnCours[callSid];
  
@@ -333,3 +391,20 @@ app.post('/prendre-message', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Giorgia — Secrétaire VYLURIS démarrée sur le port ${PORT}`);
 });
+ 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
