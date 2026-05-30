@@ -1,3 +1,4 @@
+
 const express = require('express');
 const twilio = require('twilio');
 const axios = require('axios');
@@ -54,6 +55,18 @@ Puis tu recentres naturellement la conversation.
  
 Tes réponses doivent être COURTES, fluides et crédibles. Maximum 2-3 phrases à la fois. Tu es une vraie assistante de direction, pas un chatbot.`;
  
+// ─── NETTOYAGE TEXTE POUR ALICE ───────────────────────────────────────────────
+function nettoyerPourVoix(texte) {
+  return texte
+    .replace(/[#*_~`]/g, '')           // hashtags, astérisques, underscores
+    .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // liens markdown
+    .replace(/[-–—]{2,}/g, ', ')       // tirets multiples
+    .replace(/\.{2,}/g, '.')           // points multiples
+    .replace(/\n+/g, ' ')             // sauts de ligne
+    .replace(/\s+/g, ' ')             // espaces multiples
+    .trim();
+}
+ 
 // ─── STOCKAGE TEMPORAIRE ──────────────────────────────────────────────────────
 const appelsEnCours = {};
  
@@ -80,7 +93,7 @@ async function giorgiaRepond(conversation, instruction) {
         }
       }
     );
-    return response.data.content[0].text.trim();
+    return nettoyerPourVoix(response.data.content[0].text);
   } catch (err) {
     console.error('Erreur Claude:', err.message);
     return 'Studio VYLURIS bonjour, Giorgia à l\'appareil. Un instant s\'il vous plaît.';
