@@ -2,14 +2,14 @@
   "name": "giorgia-vyluris",
   "version": "1.0.0",
   "description": "Giorgia — Secrétaire virtuelle Studio VYLURIS",
-  "main": "index-openai-realtime-vyluris.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node index-openai-realtime-vyluris.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "twilio": "^4.19.0",
-    "ws": "^8.16.0",
+    "axios": "^1.6.2",
     "dotenv": "^16.4.1"
   },
   "engines": {
