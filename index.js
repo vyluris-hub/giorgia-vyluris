@@ -332,3 +332,4 @@ app.post('/prendre-message', async (req, res) => {
 // ─── START ────────────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`✅ Giorgia — Secrétaire VYLURIS démarrée sur le port ${PORT}`);
+});
