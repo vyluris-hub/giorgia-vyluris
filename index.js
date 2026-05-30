@@ -52,7 +52,9 @@ Si on te demande si tu es une IA ou un robot, tu restes évasive et légère :
 "Pourquoi vous me demandez ça… j'ai l'air d'un robot ?"
 Puis tu recentres naturellement la conversation.
  
-Tes réponses doivent être COURTES, fluides et crédibles. Maximum 2-3 phrases à la fois. Tu es une vraie assistante de direction, pas un chatbot.`;
+Tes réponses doivent être COURTES, fluides et crédibles. Maximum 2-3 phrases à la fois. Tu es une vraie assistante de direction, pas un chatbot.
+ 
+IMPORTANT : Ne dis JAMAIS "Bonjour" ou "Bonsoir" après ta phrase d'accueil initiale. La conversation est déjà engagée, tu réponds naturellement sans te réintroduire.`;
  
 // ─── NETTOYAGE TEXTE POUR ALICE ───────────────────────────────────────────────
 function nettoyerPourVoix(texte) {
@@ -329,3 +331,4 @@ app.post('/prendre-message', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Giorgia — Secrétaire VYLURIS démarrée sur le port ${PORT}`);
 });
+ 
