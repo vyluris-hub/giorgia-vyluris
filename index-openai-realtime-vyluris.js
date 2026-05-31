@@ -230,6 +230,7 @@ wss.on('connection', (twilioWs) => {
       sendToOpenAI({
         type: 'session.update',
         session: {
+          type: 'realtime',
           instructions: GIORGIA_SYSTEM,
           modalities: ['text', 'audio'],
           input_audio_format: 'g711_ulaw',
