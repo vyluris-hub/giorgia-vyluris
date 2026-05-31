@@ -120,7 +120,6 @@ wss.on('connection', (twilioWs) => {
       type: 'session.update',
       session: {
         instructions: GIORGIA_SYSTEM,
-        modalities: ['text', 'audio'],
         input_audio_format: 'g711_ulaw',
         output_audio_format: 'g711_ulaw',
         input_audio_transcription: { model: 'whisper-1' },
