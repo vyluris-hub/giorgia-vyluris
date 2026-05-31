@@ -108,6 +108,7 @@ wss.on('connection', (twilioWs) => {
 
   openaiWs.on('open', () => {
     console.log('OpenAI connecte');
+    setTimeout(() => {
     toOpenAI({
       type: 'session.update',
       session: {
@@ -120,7 +121,7 @@ wss.on('connection', (twilioWs) => {
             turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
             transcription: { model: 'whisper-1' }
           },
-          output: { format: { type: 'audio/pcmu' } }
+          output: { format: { type: 'audio/pcmu' }, voice: 'shimmer' }
         },
         tools: [
           {
@@ -138,19 +139,20 @@ wss.on('connection', (twilioWs) => {
     });
     toOpenAI({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Decroche le telephone avec une phrase courte et naturelle en francais.' }] } });
     toOpenAI({ type: 'response.create' });
+    }, 250);
   });
 
   openaiWs.on('message', async (raw) => {
     let ev;
     try { ev = JSON.parse(raw.toString()); } catch { return; }
 
-    if (ev.type === 'response.audio.delta' && ev.delta) {
+    if ((ev.type === 'response.audio.delta' || ev.type === 'response.output_audio.delta') && ev.delta) {
       sendAudio(ev.delta);
     }
 
     if (ev.type === 'session.updated') console.log('Session OK');
     if (ev.type === 'response.created') console.log('Reponse creee');
-    if (ev.type === 'response.audio.delta') console.log('Audio delta, streamSid:', streamSid ? 'OK' : 'MANQUANT');
+    if (ev.type === 'response.audio.delta' || ev.type === 'response.output_audio.delta') console.log('Audio delta, streamSid:', streamSid ? 'OK' : 'MANQUANT');
 
     if (ev.type === 'response.output_item.added' && ev.item && ev.item.type === 'function_call') { fnName = ev.item.name; fnArgs = ''; }
     if (ev.type === 'response.function_call_arguments.delta') fnArgs += ev.delta || '';
