@@ -190,7 +190,7 @@ wss.on('connection', (twilioWs) => {
             turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
             transcription: { model: 'whisper-1' }
           },
-          output: { format: { type: 'audio/pcmu' }, voice: 'shimmer' }
+          output: { format: { type: 'audio/pcmu' }, voice: 'coral' }
         },
         tools: [
           {
