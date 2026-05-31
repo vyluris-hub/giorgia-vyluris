@@ -10,28 +10,17 @@ const wss    = new WebSocket.Server({ server, path: '/media-stream' });
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// ─── CONFIG ───────────────────────────────────────────────────────────────────
 const {
-  TWILIO_ACCOUNT_SID,
-  TWILIO_AUTH_TOKEN,
-  TWILIO_PHONE,
-  TONY_PHONE,
-  OPENAI_API_KEY,
-  PUBLIC_URL,
-  PORT = 8080
+  TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE,
+  TONY_PHONE, OPENAI_API_KEY, PUBLIC_URL, PORT = 8080
 } = process.env;
 
-// Twilio client lazy
 let _twilio = null;
 function tw() {
-  if (!_twilio) {
-    const twilio = require('twilio');
-    _twilio = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
-  }
+  if (!_twilio) { const t = require('twilio'); _twilio = t(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN); }
   return _twilio;
 }
 
-// ─── SYSTÈME GIORGIA ──────────────────────────────────────────────────────────
 const GIORGIA_SYSTEM = `Tu es Giorgia, l'assistante téléphonique officielle du Studio VYLURIS, direction Antoine CALDERINI.
 Tu réponds toujours en français avec une voix naturelle, élégante, chaleureuse et professionnelle.
 Tu ne dois jamais paraître robotique ou réciter des phrases trop longues.
@@ -46,7 +35,6 @@ Quand tu parles des activités du studio, parle toujours de "l'équipe" ou "le s
 
 Tu ne communiques JAMAIS d'informations sur la vie privée, finances, contrats ou projets non publics d'Antoine CALDERINI.
 Si une question dépasse tes autorisations : "Je suis désolée, cette information reste confidentielle."
-
 Si on te demande si tu es une IA : "Pourquoi vous me demandez ça… j'ai l'air d'un robot ?" puis recentre la conversation.
 
 Objectif :
@@ -54,17 +42,14 @@ Objectif :
 2. Demander son nom et motif
 3. Quand tu as nom + motif, appelle l'outil envoyer_sms_a_tony
 4. Dis que tu vérifies la disponibilité de Monsieur Calderini
-5. Si Tony accepte → transfert automatique
-6. Si Tony refuse → propose de prendre un message
-7. Si message → appelle transmettre_message_a_tony
+5. Si Tony accepte -> transfert automatique
+6. Si Tony refuse -> propose de prendre un message
+7. Si message -> appelle transmettre_message_a_tony
 
-Réponds TOUJOURS en 1-2 phrases courtes. Tu es une vraie assistante, pas un chatbot.
-Ne dis jamais "Bonjour" après la phrase d'accueil initiale.`;
+Réponds TOUJOURS en 1-2 phrases courtes. Ne dis jamais "Bonjour" après l'accueil initial.`;
 
-// ─── STOCKAGE ─────────────────────────────────────────────────────────────────
 const appels = new Map();
 
-// ─── HELPERS ─────────────────────────────────────────────────────────────────
 function esc(v) {
   return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
@@ -73,36 +58,43 @@ async function sms(body) {
   return tw().messages.create({ body, from: TWILIO_PHONE, to: TONY_PHONE });
 }
 
-// ─── ROUTE SANTÉ ─────────────────────────────────────────────────────────────
-app.get('/', (req, res) => res.send('✅ Giorgia VYLURIS — OpenAI Realtime Voice actif'));
+app.get('/', (req, res) => res.send('Giorgia VYLURIS — OpenAI Realtime Voice actif'));
 
-// ─── 1. APPEL ENTRANT ─────────────────────────────────────────────────────────
 app.post('/appel-entrant', (req, res) => {
   const callSid   = req.body.CallSid;
   const callerNum = req.body.From || 'Inconnu';
   appels.set(callSid, { callSid, callerNum, smsEnvoye: false, decision: null, createdAt: Date.now() });
 
   const wsUrl = PUBLIC_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') + '/media-stream';
-  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Connect>
-    <Stream url="${esc(wsUrl)}">
-      <Parameter name="callSid" value="${esc(callSid)}"/>
-      <Parameter name="callerNum" value="${esc(callerNum)}"/>
-    </Stream>
-  </Connect>
-</Response>`;
-
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${esc(wsUrl)}"><Parameter name="callSid" value="${esc(callSid)}"/><Parameter name="callerNum" value="${esc(callerNum)}"/></Stream></Connect></Response>`;
   res.type('text/xml').send(twiml);
 });
 
-// ─── 2. WEBSOCKET TWILIO ↔ OPENAI ─────────────────────────────────────────────
 wss.on('connection', (twilioWs) => {
   let streamSid = null, callSid = null, callerNum = 'Inconnu';
   let openaiWs = null, fnName = null, fnArgs = '';
+  let audioBuffer = [];
 
   function toOpenAI(obj) {
-    if (openaiWs?.readyState === WebSocket.OPEN) openaiWs.send(JSON.stringify(obj));
+    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.send(JSON.stringify(obj));
+  }
+
+  function sendAudio(delta) {
+    if (streamSid) {
+      twilioWs.send(JSON.stringify({ event: 'media', streamSid, media: { payload: delta } }));
+    } else {
+      audioBuffer.push(delta);
+    }
+  }
+
+  function flushBuffer() {
+    if (audioBuffer.length > 0) {
+      console.log('Vidage buffer:', audioBuffer.length, 'chunks');
+      audioBuffer.forEach(delta => {
+        twilioWs.send(JSON.stringify({ event: 'media', streamSid, media: { payload: delta } }));
+      });
+      audioBuffer = [];
+    }
   }
 
   function instrGiorgia(text) {
@@ -115,7 +107,7 @@ wss.on('connection', (twilioWs) => {
   });
 
   openaiWs.on('open', () => {
-    console.log('✅ OpenAI connecté');
+    console.log('OpenAI connecte');
     toOpenAI({
       type: 'session.update',
       session: {
@@ -128,25 +120,23 @@ wss.on('connection', (twilioWs) => {
             turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
             transcription: { model: 'whisper-1' }
           },
-          output: {
-            format: { type: 'audio/pcmu' }
-          }
+          output: { format: { type: 'audio/pcmu' } }
         },
         tools: [
           {
             type: 'function', name: 'envoyer_sms_a_tony',
-            description: 'Envoie SMS à Antoine CALDERINI avec nom et motif.',
+            description: 'Envoie SMS a Antoine CALDERINI avec nom et motif.',
             parameters: { type: 'object', properties: { nom: { type: 'string' }, societe: { type: 'string' }, motif: { type: 'string' } }, required: ['nom', 'motif'] }
           },
           {
             type: 'function', name: 'transmettre_message_a_tony',
-            description: 'Transmet message final de l\'appelant.',
+            description: 'Transmet message final.',
             parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] }
           }
         ]
       }
     });
-    toOpenAI({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Décroche le téléphone avec une phrase courte et naturelle.' }] } });
+    toOpenAI({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Decroche le telephone avec une phrase courte et naturelle en francais.' }] } });
     toOpenAI({ type: 'response.create' });
   });
 
@@ -154,12 +144,15 @@ wss.on('connection', (twilioWs) => {
     let ev;
     try { ev = JSON.parse(raw.toString()); } catch { return; }
 
-    if (ev.type === 'response.audio.delta') { console.log('Audio delta reçu, streamSid:', streamSid ? 'OK' : 'MANQUANT'); }
-    if (ev.type === 'response.audio.delta' && ev.delta && streamSid) {
-      twilioWs.send(JSON.stringify({ event: 'media', streamSid, media: { payload: ev.delta } }));
+    if (ev.type === 'response.audio.delta' && ev.delta) {
+      sendAudio(ev.delta);
     }
 
-    if (ev.type === 'response.output_item.added' && ev.item?.type === 'function_call') { fnName = ev.item.name; fnArgs = ''; }
+    if (ev.type === 'session.updated') console.log('Session OK');
+    if (ev.type === 'response.created') console.log('Reponse creee');
+    if (ev.type === 'response.audio.delta') console.log('Audio delta, streamSid:', streamSid ? 'OK' : 'MANQUANT');
+
+    if (ev.type === 'response.output_item.added' && ev.item && ev.item.type === 'function_call') { fnName = ev.item.name; fnArgs = ''; }
     if (ev.type === 'response.function_call_arguments.delta') fnArgs += ev.delta || '';
 
     if (ev.type === 'response.function_call_arguments.done') {
@@ -168,50 +161,56 @@ wss.on('connection', (twilioWs) => {
       const data = appels.get(callSid) || { callSid, callerNum };
 
       if (fnName === 'envoyer_sms_a_tony' && !data.smsEnvoye) {
-        data.nom    = args.nom    || 'Inconnu';
+        data.nom = args.nom || 'Inconnu';
         data.societe = args.societe || '';
-        data.motif  = args.motif  || 'Non précisé';
+        data.motif = args.motif || 'Non precise';
         data.smsEnvoye = true;
         appels.set(callSid, data);
         const soc = data.societe ? ` — ${data.societe}` : '';
-        await sms(`📞 VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNuméro : ${callerNum}\n\nRéponds OUI pour transférer, NON pour décliner.`).catch(console.error);
-        instrGiorgia('SMS envoyé. Dis à l\'appelant que tu vérifies la disponibilité, il patiente un instant.');
+        await sms(`VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNumero : ${callerNum}\n\nReponds OUI pour transferer, NON pour decliner.`).catch(console.error);
+        instrGiorgia('SMS envoye. Dis que tu verifies la disponibilite, il patiente un instant.');
       }
 
       if (fnName === 'transmettre_message_a_tony') {
-        await sms(`📝 Message VYLURIS — ${data.nom||'Appelant'}\n${args.message||''}\nNuméro : ${callerNum}`).catch(console.error);
-        instrGiorgia('Confirme que le message est transmis et prends congé chaleureusement.');
+        await sms(`Message VYLURIS — ${data.nom || 'Appelant'}\n${args.message || ''}\nNumero : ${callerNum}`).catch(console.error);
+        instrGiorgia('Confirme que le message est transmis et prends conge.');
       }
 
       fnName = null; fnArgs = '';
     }
 
-    if (ev.type === 'error') console.error('Erreur OpenAI:', ev.error);
-    if (ev.type === 'session.updated') console.log('Session OK:', JSON.stringify(ev.session?.type));
-    if (ev.type === 'response.created') console.log('Réponse créée !');
+    if (ev.type === 'error') console.error('Erreur OpenAI:', JSON.stringify(ev.error));
   });
 
-  openaiWs.on('close', () => console.log('🔌 OpenAI fermé'));
-  openaiWs.on('error', (e) => console.error('WS OpenAI error:', e.message));
+  openaiWs.on('close', () => console.log('OpenAI ferme'));
+  openaiWs.on('error', (e) => console.error('WS error:', e.message));
 
   twilioWs.on('message', (msg) => {
     let d; try { d = JSON.parse(msg.toString()); } catch { return; }
     if (d.event === 'start') {
       streamSid  = d.start.streamSid;
-      callSid    = d.start.customParameters?.callSid || d.start.callSid;
-      callerNum  = d.start.customParameters?.callerNum || callerNum;
-      console.log(`📞 Appel : ${callSid}`);
+      callSid    = d.start.customParameters && d.start.customParameters.callSid || d.start.callSid;
+      callerNum  = d.start.customParameters && d.start.customParameters.callerNum || callerNum;
+      console.log('Appel connecte:', callSid);
+      flushBuffer();
     }
-    if (d.event === 'media' && d.media?.payload) toOpenAI({ type: 'input_audio_buffer.append', audio: d.media.payload });
-    if (d.event === 'stop') { openaiWs?.close(); appels.delete(callSid); console.log(`📴 Fin : ${callSid}`); }
+    if (d.event === 'media' && d.media && d.media.payload) {
+      toOpenAI({ type: 'input_audio_buffer.append', audio: d.media.payload });
+    }
+    if (d.event === 'stop') {
+      if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+      if (callSid) appels.delete(callSid);
+      console.log('Appel termine:', callSid);
+    }
   });
 
-  twilioWs.on('close', () => openaiWs?.close());
+  twilioWs.on('close', () => {
+    if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+  });
 });
 
-// ─── 3. SMS RÉPONSE TONY ──────────────────────────────────────────────────────
 app.post('/sms-reponse', async (req, res) => {
-  const body = (req.body.Body||'').trim().toUpperCase();
+  const body = (req.body.Body || '').trim().toUpperCase();
   const oui  = ['OUI','O','OK','YES','Y'].includes(body);
   const non  = ['NON','N','NO'].includes(body);
 
@@ -222,30 +221,26 @@ app.post('/sms-reponse', async (req, res) => {
 
   if (oui) {
     appel.decision = 'OUI';
-    twimlMsg.message('✅ Transfert en cours...');
-    await tw().calls(appel.callSid).update({ twiml: `<Response><Say language="fr-FR" voice="alice">Je vous transfère maintenant.</Say><Dial>${esc(TONY_PHONE)}</Dial></Response>` }).catch(console.error);
+    twimlMsg.message('Transfert en cours...');
+    await tw().calls(appel.callSid).update({ twiml: `<Response><Say language="fr-FR" voice="alice">Je vous transfere maintenant.</Say><Dial>${esc(TONY_PHONE)}</Dial></Response>` }).catch(console.error);
   } else if (non) {
     appel.decision = 'NON';
-    twimlMsg.message('❌ Appel décliné.');
+    twimlMsg.message('Appel decline.');
     await tw().calls(appel.callSid).update({ twiml: `<Response><Say language="fr-FR" voice="alice">Monsieur Calderini est indisponible. Souhaitez-vous laisser un message ?</Say><Record maxLength="90" transcribeCallback="${esc(PUBLIC_URL)}/message-vocal?callSid=${esc(appel.callSid)}" /></Response>` }).catch(console.error);
   } else {
-    twimlMsg.message('Réponds OUI ou NON.');
+    twimlMsg.message('Reponds OUI ou NON.');
   }
 
   res.type('text/xml').send(twimlMsg.toString());
 });
 
-// ─── 4. MESSAGE VOCAL ─────────────────────────────────────────────────────────
 app.post('/message-vocal', async (req, res) => {
   const callSid = req.query.callSid;
-  const txt     = req.body.TranscriptionText || 'Message reçu.';
-  const data    = appels.get(callSid) || {};
-  await sms(`📝 Message VYLURIS — ${data.nom||'Appelant'}\n${txt}`).catch(console.error);
+  const txt = req.body.TranscriptionText || 'Message recu.';
+  const data = appels.get(callSid) || {};
+  await sms(`Message VYLURIS — ${data.nom || 'Appelant'}\n${txt}`).catch(console.error);
   appels.delete(callSid);
   res.status(200).send('OK');
 });
 
-// ─── START ────────────────────────────────────────────────────────────────────
-server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
-// ─── START ────────────────────────────────────────────────────────────────────
-server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
+server.listen(PORT, '0.0.0.0', () => console.log('Giorgia Realtime demarree sur', PORT));
