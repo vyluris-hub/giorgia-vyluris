@@ -232,7 +232,7 @@ wss.on('connection', (twilioWs) => {
         session: {
           type: 'realtime',
           instructions: GIORGIA_SYSTEM,
-          voice: 'marin',
+          voice: 'shimmer',
           modalities: ['text', 'audio'],
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
