@@ -111,7 +111,7 @@ wss.on('connection', (twilioWs) => {
   }
 
   openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime', {
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` }
   });
 
   openaiWs.on('open', () => {
