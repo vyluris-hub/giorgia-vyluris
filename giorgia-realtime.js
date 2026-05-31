@@ -120,6 +120,7 @@ wss.on('connection', (twilioWs) => {
       type: 'session.update',
       session: {
         type: 'realtime',
+        output_modalities: ['audio'],
         instructions: GIORGIA_SYSTEM,
         audio: {
           input: {
@@ -244,5 +245,7 @@ app.post('/message-vocal', async (req, res) => {
   res.status(200).send('OK');
 });
 
+// ─── START ────────────────────────────────────────────────────────────────────
+server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
 // ─── START ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
