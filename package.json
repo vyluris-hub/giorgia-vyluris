@@ -2,9 +2,9 @@
   "name": "giorgia-vyluris",
   "version": "1.0.0",
   "description": "Giorgia — Secrétaire virtuelle Studio VYLURIS",
-  "main": "index-openai-realtime-vyluris.js",
+  "main": "giorgia-realtime.js",
   "scripts": {
-    "node giorgia-realtime.js"
+    "start": "node giorgia-realtime.js"
   },
   "dependencies": {
     "express": "^4.18.2",
