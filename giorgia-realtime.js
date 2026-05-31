@@ -153,6 +153,7 @@ wss.on('connection', (twilioWs) => {
     let ev;
     try { ev = JSON.parse(raw.toString()); } catch { return; }
 
+    if (ev.type === 'response.audio.delta') { console.log('Audio delta reçu, streamSid:', streamSid ? 'OK' : 'MANQUANT'); }
     if (ev.type === 'response.audio.delta' && ev.delta && streamSid) {
       twilioWs.send(JSON.stringify({ event: 'media', streamSid, media: { payload: ev.delta } }));
     }
@@ -185,6 +186,8 @@ wss.on('connection', (twilioWs) => {
     }
 
     if (ev.type === 'error') console.error('Erreur OpenAI:', ev.error);
+    if (ev.type === 'session.updated') console.log('Session OK:', JSON.stringify(ev.session?.type));
+    if (ev.type === 'response.created') console.log('Réponse créée !');
   });
 
   openaiWs.on('close', () => console.log('🔌 OpenAI fermé'));
