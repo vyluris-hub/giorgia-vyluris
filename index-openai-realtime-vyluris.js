@@ -217,7 +217,7 @@ wss.on('connection', (twilioWs) => {
   }
 
   function connectOpenAI() {
-    openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
+    openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime', {
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
         
