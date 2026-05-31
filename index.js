@@ -237,3 +237,4 @@ app.post('/message-vocal', async (req, res) => {
 
 // ─── START ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
+CACHE_BUST=1
