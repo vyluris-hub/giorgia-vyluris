@@ -41,7 +41,11 @@ if (!TWILIO_ACCOUNT_SID || !TWILIO_AUTH_TOKEN || !TWILIO_PHONE || !TONY_PHONE ||
 // Forcer le PORT de Render
 const RENDER_PORT = process.env.PORT || 8080;
 
-const client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+let _client = null;
+function getClient() {
+  if (!_client) _client = twilio(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN);
+  return _client;
+}
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server, path: '/media-stream' });
 
@@ -140,7 +144,7 @@ function xmlEscape(value) {
 }
 
 async function smsTony(body) {
-  return client.messages.create({
+  return getClient().messages.create({
     body,
     from: TWILIO_PHONE,
     to: TONY_PHONE
@@ -154,7 +158,7 @@ async function couperEtTransferer(callSid) {
   <Dial>${xmlEscape(TONY_PHONE)}</Dial>
 </Response>`;
 
-  await client.calls(callSid).update({ twiml });
+  await getClient().calls(callSid).update({ twiml });
 }
 
 async function couperEtPrendreMessage(callSid) {
@@ -165,7 +169,7 @@ async function couperEtPrendreMessage(callSid) {
   <Say language="fr-FR" voice="alice">Merci, votre message a bien été transmis. Bonne journée.</Say>
 </Response>`;
 
-  await client.calls(callSid).update({ twiml });
+  await getClient().calls(callSid).update({ twiml });
 }
 
 // ─── 1. APPEL ENTRANT : Twilio connecte l'audio vers notre WebSocket ─────────
