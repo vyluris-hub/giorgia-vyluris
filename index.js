@@ -111,7 +111,7 @@ wss.on('connection', (twilioWs) => {
   }
 
   openaiWs = new WebSocket('wss://api.openai.com/v1/realtime?model=gpt-realtime', {
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` }
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'OpenAI-Beta': 'realtime=v1' }
   });
 
   openaiWs.on('open', () => {
@@ -237,4 +237,3 @@ app.post('/message-vocal', async (req, res) => {
 
 // ─── START ────────────────────────────────────────────────────────────────────
 server.listen(PORT, '0.0.0.0', () => console.log(`✅ Giorgia Realtime démarrée sur ${PORT}`));
-CACHE_BUST=1
