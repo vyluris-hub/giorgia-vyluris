@@ -230,13 +230,11 @@ wss.on('connection', (twilioWs) => {
       sendToOpenAI({
         type: 'session.update',
         session: {
-          type: 'realtime',
           instructions: GIORGIA_SYSTEM,
-          voice: 'shimmer',
           modalities: ['text', 'audio'],
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
-          input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
+          input_audio_transcription: { model: 'whisper-1' },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
