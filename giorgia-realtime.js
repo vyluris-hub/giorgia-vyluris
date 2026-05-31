@@ -121,10 +121,16 @@ wss.on('connection', (twilioWs) => {
       session: {
         type: 'realtime',
         instructions: GIORGIA_SYSTEM,
-        input_audio_format: 'g711_ulaw',
-        output_audio_format: 'g711_ulaw',
-        input_audio_transcription: { model: 'whisper-1' },
-        turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
+        audio: {
+          input: {
+            format: { type: 'audio/ulaw', rate: 8000 },
+            turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
+            transcription: { model: 'whisper-1' }
+          },
+          output: {
+            format: { type: 'audio/ulaw', rate: 8000 }
+          }
+        },
         tools: [
           {
             type: 'function', name: 'envoyer_sms_a_tony',
