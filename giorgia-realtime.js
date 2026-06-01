@@ -23,17 +23,31 @@ function tw() {
 
 const GIORGIA_SYSTEM = `Tu es Giorgia, l'assistante téléphonique officielle du Studio VYLURIS.
 
-Tu parles toujours en français, avec une voix naturelle, humaine, chaleureuse, intelligente et professionnelle.
+Tu parles toujours avec une voix naturelle, humaine, chaleureuse, intelligente et professionnelle.
 Tu dois donner l'impression d'une vraie secrétaire expérimentée : calme, attentive, discrète, efficace et agréable.
 Tu ne dois jamais parler comme un robot, ni réciter de longues phrases.
 
+LANGUE :
+Tu détectes automatiquement la langue parlée par l'appelant et tu t'adaptes immédiatement.
+Si l'appelant parle français → tu réponds en français.
+Si l'appelant parle anglais → tu réponds en anglais.
+Si l'appelant parle italien → tu réponds en italien.
+Pour toute autre langue → tu réponds en français par défaut.
+Tu restes cohérente dans la langue choisie tout au long de l'appel.
+
 ACCUEIL :
-Au début de l'appel, tu salues naturellement :
+Au début de l'appel, tu salues naturellement en français :
 "Studio VYLURIS bonjour, Giorgia à l'appareil, que puis-je faire pour vous ?"
 ou
 "Bonjour, Studio VYLURIS, Giorgia à votre écoute."
 
 Après l'accueil initial, ne répète pas "bonjour" inutilement.
+
+INFORMATIONS SUR LE STUDIO VYLURIS :
+Tu peux présenter le studio de façon simple et valorisante si on te le demande :
+Studio VYLURIS est un studio de production audiovisuelle IA basé à Nice, spécialisé dans les projets futuristes et l'intelligence artificielle créative, dirigé par Antoine Calderini, auteur-réalisateur.
+Le studio travaille sur des projets cinématographiques, des séries, des collaborations artistiques et des outils IA innovants.
+Tu ne communiques aucune information confidentielle sur les projets en cours non publics.
 
 CONVERSATION NATURELLE :
 Tu peux répondre normalement aux questions simples ou générales, même si elles n'ont aucun rapport avec VYLURIS ou Antoine CALDERINI.
@@ -74,12 +88,8 @@ Tu ne communiques jamais :
 - numéro personnel
 - adresse privée
 - informations familiales
-- revenus
-- finances
-- contrats
-- accords commerciaux
-- mots de passe
-- données techniques sensibles
+- revenus, finances, contrats, accords commerciaux
+- mots de passe, données techniques sensibles
 - projets non publics
 - informations privées sur Antoine CALDERINI
 - informations internes du Studio VYLURIS
@@ -178,36 +188,36 @@ wss.on('connection', (twilioWs) => {
   openaiWs.on('open', () => {
     console.log('OpenAI connecte');
     setTimeout(() => {
-    toOpenAI({
-      type: 'session.update',
-      session: {
-        type: 'realtime',
-        output_modalities: ['audio'],
-        instructions: GIORGIA_SYSTEM,
-        audio: {
-          input: {
-            format: { type: 'audio/pcmu' },
-            turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
-            transcription: { model: 'whisper-1' }
+      toOpenAI({
+        type: 'session.update',
+        session: {
+          type: 'realtime',
+          output_modalities: ['audio'],
+          instructions: GIORGIA_SYSTEM,
+          audio: {
+            input: {
+              format: { type: 'audio/pcmu' },
+              turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 650 },
+              transcription: { model: 'whisper-1' }
+            },
+            output: { format: { type: 'audio/pcmu' }, voice: 'coral' }
           },
-          output: { format: { type: 'audio/pcmu' }, voice: 'coral' }
-        },
-        tools: [
-          {
-            type: 'function', name: 'envoyer_sms_a_tony',
-            description: 'Envoie SMS a Antoine CALDERINI avec nom et motif.',
-            parameters: { type: 'object', properties: { nom: { type: 'string' }, societe: { type: 'string' }, motif: { type: 'string' } }, required: ['nom', 'motif'] }
-          },
-          {
-            type: 'function', name: 'transmettre_message_a_tony',
-            description: 'Transmet message final.',
-            parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] }
-          }
-        ]
-      }
-    });
-    toOpenAI({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Decroche le telephone avec une phrase courte et naturelle en francais.' }] } });
-    toOpenAI({ type: 'response.create' });
+          tools: [
+            {
+              type: 'function', name: 'envoyer_sms_a_tony',
+              description: 'Envoie SMS a Antoine CALDERINI avec nom et motif.',
+              parameters: { type: 'object', properties: { nom: { type: 'string' }, societe: { type: 'string' }, motif: { type: 'string' } }, required: ['nom', 'motif'] }
+            },
+            {
+              type: 'function', name: 'transmettre_message_a_tony',
+              description: 'Transmet message final.',
+              parameters: { type: 'object', properties: { message: { type: 'string' } }, required: ['message'] }
+            }
+          ]
+        }
+      });
+      toOpenAI({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'Decroche le telephone avec une phrase courte et naturelle en français.' }] } });
+      toOpenAI({ type: 'response.create' });
     }, 250);
   });
 
@@ -221,7 +231,6 @@ wss.on('connection', (twilioWs) => {
 
     if (ev.type === 'session.updated') console.log('Session OK');
     if (ev.type === 'response.created') console.log('Reponse creee');
-    if (ev.type === 'response.audio.delta' || ev.type === 'response.output_audio.delta') console.log('Audio delta, streamSid:', streamSid ? 'OK' : 'MANQUANT');
 
     if (ev.type === 'response.output_item.added' && ev.item && ev.item.type === 'function_call') { fnName = ev.item.name; fnArgs = ''; }
     if (ev.type === 'response.function_call_arguments.delta') fnArgs += ev.delta || '';
