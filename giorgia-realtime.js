@@ -128,6 +128,7 @@ OBJECTIF PRINCIPAL :
 Aider naturellement l'appelant, répondre aux questions normales quand c'est possible, protéger les informations confidentielles, refuser les demandes déplacées, et prévenir Antoine CALDERINI uniquement quand l'appelant veut réellement le joindre ou laisser un message.`;
 
 const appels = new Map();
+const smsVerrou = new Set(); // verrou global anti-doublon SMS
 
 // Musique d'attente Twilio (URL publique MP3)
 const HOLD_MUSIC_URL = 'https://com.twilio.music.classical.s3.amazonaws.com/BeethovenForElise.mp3';
@@ -267,7 +268,8 @@ wss.on('connection', (twilioWs) => {
       try { args = JSON.parse(fnArgs || '{}'); } catch {}
       const data = appels.get(callSid) || { callSid, callerNum };
 
-      if (fnName === 'envoyer_sms_a_tony' && !data.smsEnvoye) {
+      if (fnName === 'envoyer_sms_a_tony' && !data.smsEnvoye && !smsVerrou.has(callSid)) {
+        smsVerrou.add(callSid);
         data.nom = args.nom || 'Inconnu';
         data.societe = args.societe || '';
         data.motif = args.motif || 'Non precise';
