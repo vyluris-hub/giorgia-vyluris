@@ -129,6 +129,11 @@ Aider naturellement l'appelant, répondre aux questions normales quand c'est pos
 
 const appels = new Map();
 
+// Musique d'attente Twilio (URL publique MP3)
+const HOLD_MUSIC_URL = 'https://com.twilio.music.classical.s3.amazonaws.com/BeethovenForElise.mp3';
+// Timeout attente réponse Tony : 60 secondes
+const TIMEOUT_MS = 60000;
+
 function esc(v) {
   return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&apos;');
 }
@@ -137,12 +142,34 @@ async function sms(body) {
   return tw().messages.create({ body, from: TWILIO_PHONE, to: TONY_PHONE });
 }
 
+// Met l'appelant en attente avec musique
+async function mettreEnAttente(callSid) {
+  const twiml = `<Response><Play loop="10">${esc(HOLD_MUSIC_URL)}</Play></Response>`;
+  await tw().calls(callSid).update({ twiml }).catch(console.error);
+}
+
+// Décline automatiquement après timeout
+function demarrerTimeout(callSid) {
+  const data = appels.get(callSid);
+  if (!data) return;
+  data.timeoutId = setTimeout(async () => {
+    const appel = appels.get(callSid);
+    if (!appel || appel.decision) return; // déjà traité
+    console.log('Timeout 60s — déclin automatique pour', callSid);
+    appel.decision = 'TIMEOUT';
+    appels.set(callSid, appel);
+    await tw().calls(callSid).update({
+      twiml: `<Response><Say language="fr-FR" voice="alice">Je suis désolée, Monsieur Calderini n'est pas disponible pour le moment. Souhaitez-vous laisser un message après le bip ?</Say><Record maxLength="90" transcribeCallback="${esc(PUBLIC_URL)}/message-vocal?callSid=${esc(callSid)}" /></Response>`
+    }).catch(console.error);
+  }, TIMEOUT_MS);
+}
+
 app.get('/', (req, res) => res.send('Giorgia VYLURIS — OpenAI Realtime Voice actif'));
 
 app.post('/appel-entrant', (req, res) => {
   const callSid   = req.body.CallSid;
   const callerNum = req.body.From || 'Inconnu';
-  appels.set(callSid, { callSid, callerNum, smsEnvoye: false, decision: null, createdAt: Date.now() });
+  appels.set(callSid, { callSid, callerNum, smsEnvoye: false, decision: null, timeoutId: null, createdAt: Date.now() });
 
   const wsUrl = PUBLIC_URL.replace(/^https/, 'wss').replace(/^http/, 'ws') + '/media-stream';
   const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${esc(wsUrl)}"><Parameter name="callSid" value="${esc(callSid)}"/><Parameter name="callerNum" value="${esc(callerNum)}"/></Stream></Connect></Response>`;
@@ -247,8 +274,18 @@ wss.on('connection', (twilioWs) => {
         data.smsEnvoye = true;
         appels.set(callSid, data);
         const soc = data.societe ? ` — ${data.societe}` : '';
-        await sms(`VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNumero : ${callerNum}\n\nReponds OUI pour transferer, NON pour decliner.`).catch(console.error);
-        instrGiorgia('SMS envoye. Dis que tu verifies la disponibilite, il patiente un instant.');
+
+        // Envoie SMS
+        await sms(`VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNumero : ${callerNum}\n\nReponds OUI pour transferer, NON pour decliner.\n(Timeout 60s)`).catch(console.error);
+
+        // Ferme le stream OpenAI et met en attente avec musique
+        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+        await mettreEnAttente(callSid);
+
+        // Démarre le timeout 60 secondes
+        demarrerTimeout(callSid);
+
+        console.log('SMS envoye, musique en attente, timeout 60s demarre');
       }
 
       if (fnName === 'transmettre_message_a_tony') {
@@ -279,6 +316,9 @@ wss.on('connection', (twilioWs) => {
     }
     if (d.event === 'stop') {
       if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+      // Annule le timeout si l'appel se termine avant
+      const appel = appels.get(callSid);
+      if (appel && appel.timeoutId) clearTimeout(appel.timeoutId);
       if (callSid) appels.delete(callSid);
       console.log('Appel termine:', callSid);
     }
@@ -299,14 +339,21 @@ app.post('/sms-reponse', async (req, res) => {
 
   if (!appel) { twimlMsg.message('Aucun appel en attente.'); return res.type('text/xml').send(twimlMsg.toString()); }
 
+  // Annule le timeout puisqu'on a une réponse
+  if (appel.timeoutId) clearTimeout(appel.timeoutId);
+
   if (oui) {
     appel.decision = 'OUI';
     twimlMsg.message('Transfert en cours...');
-    await tw().calls(appel.callSid).update({ twiml: `<Response><Say language="fr-FR" voice="alice">Je vous transfere maintenant.</Say><Dial>${esc(TONY_PHONE)}</Dial></Response>` }).catch(console.error);
+    await tw().calls(appel.callSid).update({
+      twiml: `<Response><Say language="fr-FR" voice="alice">Je vous transfère maintenant.</Say><Dial>${esc(TONY_PHONE)}</Dial></Response>`
+    }).catch(console.error);
   } else if (non) {
     appel.decision = 'NON';
     twimlMsg.message('Appel decline.');
-    await tw().calls(appel.callSid).update({ twiml: `<Response><Say language="fr-FR" voice="alice">Monsieur Calderini est indisponible. Souhaitez-vous laisser un message ?</Say><Record maxLength="90" transcribeCallback="${esc(PUBLIC_URL)}/message-vocal?callSid=${esc(appel.callSid)}" /></Response>` }).catch(console.error);
+    await tw().calls(appel.callSid).update({
+      twiml: `<Response><Say language="fr-FR" voice="alice">Je suis désolée, Monsieur Calderini n'est pas disponible pour le moment. Souhaitez-vous laisser un message après le bip ?</Say><Record maxLength="90" transcribeCallback="${esc(PUBLIC_URL)}/message-vocal?callSid=${esc(appel.callSid)}" /></Response>`
+    }).catch(console.error);
   } else {
     twimlMsg.message('Reponds OUI ou NON.');
   }
