@@ -146,8 +146,6 @@ Aider naturellement l'appelant, répondre aux questions normales quand c'est pos
 const appels = new Map();
 const smsVerrou = new Set(); // verrou global anti-doublon SMS
 
-// Musique d'attente Twilio (URL publique MP3)
-const HOLD_MUSIC_URL = 'https://com.twilio.music.classical.s3.amazonaws.com/BeethovenForElise.mp3';
 // Timeout attente réponse Tony : 60 secondes
 const TIMEOUT_MS = 60000;
 
@@ -157,12 +155,6 @@ function esc(v) {
 
 async function sms(body) {
   return tw().messages.create({ body, from: TWILIO_PHONE, to: TONY_PHONE });
-}
-
-// Met l'appelant en attente avec musique
-async function mettreEnAttente(callSid) {
-  const twiml = `<Response><Play loop="10">${esc(HOLD_MUSIC_URL)}</Play></Response>`;
-  await tw().calls(callSid).update({ twiml }).catch(console.error);
 }
 
 // Décline automatiquement après timeout
