@@ -288,18 +288,13 @@ wss.on('connection', (twilioWs) => {
         // Envoie notification Telegram
         await sendTelegram(`📞 <b>VYLURIS</b>\n👤 ${data.nom}${soc}\n📋 ${data.motif}\n📱 ${callerNum}\n\n✅ Réponds <b>OUI</b> pour transférer\n❌ Réponds <b>NON</b> pour décliner\n⏱ Timeout 60s`).catch(console.error);
 
-        // Met la musique EN PREMIER avant de fermer OpenAI
-        await mettreEnAttente(callSid);
-
-        // Ferme OpenAI apres que Twilio a bascule sur la musique
-        setTimeout(() => {
-          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
-        }, 1000);
+        // Giorgia reste en ligne et dit de patienter
+        instrGiorgia("Dis à l'appelant de bien vouloir patienter un instant, tu vérifies la disponibilité de Monsieur Calderini. Reste en ligne avec lui, sois naturelle et rassurante.");
 
         // Démarre le timeout 60 secondes
         demarrerTimeout(callSid);
 
-        console.log('SMS envoye, musique en attente, timeout 60s demarre');
+        console.log('Telegram envoye, Giorgia en attente, timeout 60s demarre');
       }
 
       if (fnName === 'transmettre_message_a_tony') {
