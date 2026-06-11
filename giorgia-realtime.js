@@ -15,6 +15,22 @@ const {
   TONY_PHONE, OPENAI_API_KEY, PUBLIC_URL, PORT = 8080
 } = process.env;
 
+// Telegram
+const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '8654714582:AAGr5dlO6BAkpkdVXmvVv0Y-Sp0RH-xghGU';
+const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '6841137368';
+
+async function sendTelegram(text) {
+  const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: TELEGRAM_CHAT_ID, text, parse_mode: 'HTML' })
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error('Telegram error: ' + JSON.stringify(data));
+  return data;
+}
+
 let _twilio = null;
 function tw() {
   if (!_twilio) { const t = require('twilio'); _twilio = t(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN); }
@@ -277,8 +293,8 @@ wss.on('connection', (twilioWs) => {
         appels.set(callSid, data);
         const soc = data.societe ? ` — ${data.societe}` : '';
 
-        // Envoie SMS
-        await sms(`VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNumero : ${callerNum}\n\nReponds OUI pour transferer, NON pour decliner.\n(Timeout 60s)`).catch(console.error);
+        // Envoie notification Telegram
+        await sendTelegram(`📞 <b>VYLURIS</b>\n👤 ${data.nom}${soc}\n📋 ${data.motif}\n📱 ${callerNum}\n\n✅ Réponds <b>OUI</b> pour transférer\n❌ Réponds <b>NON</b> pour décliner\n⏱ Timeout 60s`).catch(console.error);
 
         // Met la musique EN PREMIER avant de fermer OpenAI
         await mettreEnAttente(callSid);
@@ -295,7 +311,7 @@ wss.on('connection', (twilioWs) => {
       }
 
       if (fnName === 'transmettre_message_a_tony') {
-        await sms(`Message VYLURIS — ${data.nom || 'Appelant'}\n${args.message || ''}\nNumero : ${callerNum}`).catch(console.error);
+        await sendTelegram(`💬 <b>Message VYLURIS</b>\n👤 ${data.nom || 'Appelant'}\n📱 ${callerNum}\n\n${args.message || ''}`).catch(console.error);
         instrGiorgia('Confirme que le message est transmis et prends conge.');
       }
 
@@ -336,44 +352,64 @@ wss.on('connection', (twilioWs) => {
 });
 
 app.post('/sms-reponse', async (req, res) => {
-  const body = (req.body.Body || '').trim().toUpperCase();
+  res.status(200).send('OK');
+});
+
+// Webhook Telegram
+app.post('/telegram-webhook', async (req, res) => {
+  res.status(200).send('OK');
+  const msg = req.body && req.body.message;
+  if (!msg || !msg.text) return;
+  if (String(msg.chat.id) !== String(TELEGRAM_CHAT_ID)) return;
+
+  const body = msg.text.trim().toUpperCase();
   const oui  = ['OUI','O','OK','YES','Y'].includes(body);
   const non  = ['NON','N','NO'].includes(body);
 
   const appel = [...appels.values()].filter(a => a.smsEnvoye && !a.decision).sort((a,b) => b.createdAt - a.createdAt)[0];
-  const twimlMsg = new (require('twilio').twiml.MessagingResponse)();
 
-  if (!appel) { twimlMsg.message('Aucun appel en attente.'); return res.type('text/xml').send(twimlMsg.toString()); }
+  if (!appel) {
+    await sendTelegram('ℹ️ Aucun appel en attente.').catch(console.error);
+    return;
+  }
 
-  // Annule le timeout puisqu'on a une réponse
   if (appel.timeoutId) clearTimeout(appel.timeoutId);
 
   if (oui) {
     appel.decision = 'OUI';
-    twimlMsg.message('Transfert en cours...');
+    await sendTelegram('✅ Transfert en cours...').catch(console.error);
     await tw().calls(appel.callSid).update({
       twiml: `<Response><Say language="fr-FR" voice="alice">Je vous transfère maintenant.</Say><Dial>${esc(TONY_PHONE)}</Dial></Response>`
     }).catch(console.error);
   } else if (non) {
     appel.decision = 'NON';
-    twimlMsg.message('Appel decline.');
+    await sendTelegram('❌ Appel décliné.').catch(console.error);
     await tw().calls(appel.callSid).update({
       twiml: `<Response><Say language="fr-FR" voice="alice">Je suis désolée, Monsieur Calderini n'est pas disponible pour le moment. Souhaitez-vous laisser un message après le bip ?</Say><Record maxLength="90" transcribeCallback="${esc(PUBLIC_URL)}/message-vocal?callSid=${esc(appel.callSid)}" /></Response>`
     }).catch(console.error);
   } else {
-    twimlMsg.message('Reponds OUI ou NON.');
+    await sendTelegram('⚠️ Réponds OUI ou NON.').catch(console.error);
   }
-
-  res.type('text/xml').send(twimlMsg.toString());
 });
 
 app.post('/message-vocal', async (req, res) => {
   const callSid = req.query.callSid;
   const txt = req.body.TranscriptionText || 'Message recu.';
   const data = appels.get(callSid) || {};
-  await sms(`Message VYLURIS — ${data.nom || 'Appelant'}\n${txt}`).catch(console.error);
+  await sendTelegram(`🎙 <b>Message vocal VYLURIS</b>\n👤 ${data.nom || 'Appelant'}\n📱 Inconnu\n\n${txt}`).catch(console.error);
   appels.delete(callSid);
   res.status(200).send('OK');
 });
 
-server.listen(PORT, '0.0.0.0', () => console.log('Giorgia Realtime demarree sur', PORT));
+server.listen(PORT, '0.0.0.0', async () => {
+  console.log('Giorgia Realtime demarree sur', PORT);
+  // Enregistre le webhook Telegram
+  const webhookUrl = PUBLIC_URL + '/telegram-webhook';
+  const r = await fetch(`https://api.telegram.org/bot${TELEGRAM_TOKEN}/setWebhook`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: webhookUrl })
+  });
+  const d = await r.json();
+  console.log('Telegram webhook:', d.ok ? 'OK' : JSON.stringify(d));
+});
