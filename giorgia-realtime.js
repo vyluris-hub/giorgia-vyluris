@@ -280,9 +280,13 @@ wss.on('connection', (twilioWs) => {
         // Envoie SMS
         await sms(`VYLURIS — ${data.nom}${soc}\nMotif : ${data.motif}\nNumero : ${callerNum}\n\nReponds OUI pour transferer, NON pour decliner.\n(Timeout 60s)`).catch(console.error);
 
-        // Ferme le stream OpenAI et met en attente avec musique
-        if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+        // Met la musique EN PREMIER avant de fermer OpenAI
         await mettreEnAttente(callSid);
+
+        // Ferme OpenAI apres que Twilio a bascule sur la musique
+        setTimeout(() => {
+          if (openaiWs && openaiWs.readyState === WebSocket.OPEN) openaiWs.close();
+        }, 1000);
 
         // Démarre le timeout 60 secondes
         demarrerTimeout(callSid);
