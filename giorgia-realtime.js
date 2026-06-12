@@ -289,7 +289,7 @@ wss.on('connection', (twilioWs) => {
         await sendTelegram(`📞 <b>VYLURIS</b>\n👤 ${data.nom}${soc}\n📋 ${data.motif}\n📱 ${callerNum}\n\n✅ Réponds <b>OUI</b> pour transférer\n❌ Réponds <b>NON</b> pour décliner\n⏱ Timeout 60s`).catch(console.error);
 
         // Giorgia reste en ligne et dit de patienter
-        instrGiorgia("Dis à l'appelant de bien vouloir patienter un instant, tu vérifies la disponibilité de Monsieur Calderini. Reste en ligne avec lui, sois naturelle et rassurante.");
+        instrGiorgia("Dis exactement : Je vous mets en attente un instant, je vérifie la disponibilité de Monsieur Calderini. Puis reste silencieuse et n'ajoute plus rien.");
 
         // Démarre le timeout 60 secondes
         demarrerTimeout(callSid);
